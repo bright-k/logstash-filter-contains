@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
 
   s.name            = 'logstash-filter-contains'
-  s.version         = '1.0.0'
+  s.version         = '1.0.1'
   s.platform        = 'java'
   s.licenses        = ['Apache License (2.0)']
   s.summary         = "filter to check if value is contains"

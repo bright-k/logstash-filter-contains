@@ -72,8 +72,11 @@ class LogStash::Filters::CONTAINS < LogStash::Filters::Base
     end
 
     if @value_path
-      @next_refresh = Time.now + @refresh_interval
-      lock_for_write { load_file }
+      lock_for_write { 
+        load_file
+        @last_mtime = File.mtime(@value_path)
+        @next_refresh = Time.now() + @refresh_interval
+      }
     end
   end # def register
 
@@ -86,7 +89,7 @@ class LogStash::Filters::CONTAINS < LogStash::Filters::Base
     end
   end # def lock_for_write
 
-  def lock_for_read #ensuring only one thread updates the network block list
+  def lock_for_read #ensuring only one thread updates the value block list
     @read_lock.lock
     begin
       yield
@@ -96,11 +99,21 @@ class LogStash::Filters::CONTAINS < LogStash::Filters::Base
   end #def lock_for_read
 
   def needs_refresh?
-    @next_refresh < Time.now
+    if @next_refresh < Time.now
+      if @last_mtime != File.mtime(@value_path)
+        return true
+      else
+        @next_refresh = Time.now + @refresh_interval
+        return false
+      end
+    else
+      return false
+    end
   end # def needs_refresh
 
   def load_file
     begin
+      @logger.debug("load_file called")
       temporary = File.open(@value_path, "r") {|file| file.read.split(@separator)}
       if !temporary.empty? #ensuring the file was parsed correctly
         @value_set = temporary.to_set
@@ -115,7 +128,7 @@ class LogStash::Filters::CONTAINS < LogStash::Filters::Base
           "logstash.agent.configuration.invalid_plugin_register",
           :plugin => "filter",
           :type => "contains",
-          :error => "The file containing the network list is invalid, please check the separator character or permissions for the file."
+          :error => "The file containing the value list is invalid, please check the separator character or permissions for the file."
         )
       end
     end
@@ -139,6 +152,7 @@ class LogStash::Filters::CONTAINS < LogStash::Filters::Base
           if needs_refresh?
             load_file
             @next_refresh = Time.now() + @refresh_interval
+            @last_mtime = File.mtime(@value_path)
           end
         end #end lock
       end #end refresh from file
